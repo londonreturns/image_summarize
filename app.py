@@ -7,6 +7,7 @@ import torch
 import tempfile
 import json
 from transformers import InstructBlipProcessor, InstructBlipForConditionalGeneration
+from concurrent.futures import ThreadPoolExecutor
 
 app = Flask(__name__)
 
@@ -63,6 +64,9 @@ def caption_image(img: Image.Image, prompt: str):
     except json.JSONDecodeError:
         return {"raw": result}
 
+# Initialize ThreadPoolExecutor with a suitable number of workers (threads)
+executor = ThreadPoolExecutor(max_workers=os.cpu_count())
+
 @app.route('/summarize', methods=['POST'])
 def summarize_video():
     if 'video' not in request.files:
@@ -90,15 +94,33 @@ def summarize_video():
 
     print(f"🖼 Extracted {len(frames)} keyframes.")
 
+    # Run inference concurrently for each frame's prompts
+    future_to_frame = {}
     for frame_id, frame in frames:
         img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
-        # One pass per prompt
-        people.append(caption_image(img, prompts["people"]))
-        actions.append(caption_image(img, prompts["actions"]))
-        objects.append(caption_image(img, prompts["objects"]))
-        scenes.append(caption_image(img, prompts["scenes"]))
-        summaries.append(caption_image(img, prompts["summaries"]))
+        # Submit inference tasks for each prompt (people, actions, etc.)
+        future_people = executor.submit(caption_image, img, prompts["people"])
+        future_actions = executor.submit(caption_image, img, prompts["actions"])
+        future_objects = executor.submit(caption_image, img, prompts["objects"])
+        future_scenes = executor.submit(caption_image, img, prompts["scenes"])
+        future_summary = executor.submit(caption_image, img, prompts["summaries"])
+
+        future_to_frame[frame_id] = {
+            "people": future_people,
+            "actions": future_actions,
+            "objects": future_objects,
+            "scenes": future_scenes,
+            "summary": future_summary
+        }
+
+    # Collect results from futures
+    for frame_id, futures in future_to_frame.items():
+        people.append(futures["people"].result())
+        actions.append(futures["actions"].result())
+        objects.append(futures["objects"].result())
+        scenes.append(futures["scenes"].result())
+        summaries.append(futures["summary"].result())
 
     # Middle frame for overall summary
     mid_frame = frames[len(frames) // 2][1]
