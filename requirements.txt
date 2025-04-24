@@ -1,0 +1,14 @@
+# Python version
+python==3.11.3
+
+# Web framework
+Flask>=2.0
+
+# Image and array processing
+opencv-python-headless>=4.5.1
+numpy>=1.19
+Pillow>=8.0
+
+# Deep learning
+torch>=1.12
+transformers>=4.30
