@@ -1,6 +1,3 @@
-# Python version
-python==3.11.3
-
 # Web framework
 Flask>=2.0
 
